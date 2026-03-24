@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "name": "tossd-brand-system",
+    "version": "1.0.0",
+    "style": "webapp-02-japaneseswiss_light"
+  },
+  "color": {
+    "bg": {
+      "base": "#F7F6F3",
+      "surface": "#FFFFFF",
+      "subtle": "#EFEDE8"
+    },
+    "fg": {
+      "primary": "#171717",
+      "secondary": "#4D4D4D",
+      "muted": "#757575"
+    },
+    "border": {
+      "default": "#D8D5CF",
+      "strong": "#B9B5AE"
+    },
+    "brand": {
+      "ink": "#111111",
+      "accent": "#0F766E",
+      "accentSoft": "#DDF3F0"
+    },
+    "state": {
+      "success": "#1D7A45",
+      "warning": "#B5681D",
+      "danger": "#A12A2A",
+      "info": "#1F5FAF"
+    },
+    "focus": {
+      "ring": "#0F766E"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "display": "\"Ivar Display\", \"Canela\", \"Times New Roman\", serif",
+      "body": "\"Suisse Intl\", \"Inter\", \"Helvetica Neue\", sans-serif",
+      "mono": "\"JetBrains Mono\", \"IBM Plex Mono\", monospace"
+    },
+    "fontSize": {
+      "hero": "clamp(3rem, 8vw, 6.5rem)",
+      "h1": "clamp(2rem, 4vw, 3.5rem)",
+      "h2": "clamp(1.5rem, 3vw, 2.25rem)",
+      "h3": "1.25rem",
+      "body": "1rem",
+      "sm": "0.875rem",
+      "xs": "0.75rem",
+      "mono": "0.875rem"
+    },
+    "fontWeight": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    },
+    "lineHeight": {
+      "tight": 1.2,
+      "normal": 1.5,
+      "relaxed": 1.7
+    }
+  },
+  "space": {
+    "1": "4px",
+    "2": "8px",
+    "3": "12px",
+    "4": "16px",
+    "6": "24px",
+    "8": "32px",
+    "12": "48px",
+    "16": "64px"
+  },
+  "radius": {
+    "sm": "6px",
+    "md": "10px",
+    "lg": "16px",
+    "pill": "999px"
+  },
+  "shadow": {
+    "soft": "0 2px 10px rgba(0,0,0,0.06)",
+    "card": "0 8px 30px rgba(0,0,0,0.08)"
+  },
+  "motion": {
+    "duration": {
+      "fast": "140ms",
+      "base": "220ms",
+      "slow": "420ms"
+    },
+    "easing": {
+      "standard": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    }
+  }
+}
