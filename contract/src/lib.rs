@@ -261,6 +261,8 @@ pub enum GamePhase {
 ///                      used for all subsequent settlement calculations so
 ///                      later admin fee changes do not alter in-flight games
 /// - `phase`          – lifecycle position: `Committed` → `Revealed` → `Completed`
+/// - `start_ledger`   – ledger sequence number at `start_game` time; used by
+///                      `reclaim_wager` to enforce the reveal timeout window
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GameState {
@@ -271,6 +273,8 @@ pub struct GameState {
     pub contract_random: BytesN<32>,
     pub fee_bps: u32,
     pub phase: GamePhase,
+    /// Ledger sequence at game creation; used for timeout enforcement.
+    pub start_ledger: u32,
 }
 
 /// Contract-wide configuration stored in persistent storage under [`StorageKey::Config`].
@@ -298,25 +302,6 @@ pub struct ContractConfig {
     pub paused: bool,
 }
 
-<<<<<<< feature/cash-out-stats
-/// Global statistics tracking the overall economic activity and solvency of the contract.
-///
-/// Invariants and meaning:
-/// - `total_games`: The total number of games started. Strictly monotonically increasing.
-/// - `total_volume`: Total volume of wagers ever placed, denoted in stroops.
-/// - `total_fees`: Cumulative fee revenue collected by the protocol (never decreases).
-/// - `reserve_balance`: The contract's internal accounting of funds available to pay out winnings.
-///                      Must always be sufficient to cover the worst-case payout (10x wager)
-///                      to prevent insolvency. Decreases when players cash out or claim winnings,
-///                      increases when players lose and forfeit their wager.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContractStats {
-    pub total_games: u64,        // Total games played
-    pub total_volume: i128,      // Total XLM wagered
-    pub total_fees: i128,        // Cumulative fees collected in stroops
-    pub reserve_balance: i128,   // Available reserves to cover payouts
-=======
 /// Aggregate statistics stored in persistent storage under [`StorageKey::Stats`].
 ///
 /// Updated atomically alongside game state transitions.
@@ -334,7 +319,6 @@ pub struct ContractStats {
     /// Current contract reserve balance in stroops; decremented on payouts,
     /// incremented when the house wins (loss forfeiture).
     pub reserve_balance: i128,
->>>>>>> master
 }
 
 /// Persistent storage key variants for the contract's data model.
@@ -383,6 +367,10 @@ const MULTIPLIER_STREAK_4_PLUS: u32 = 100_000; // 10.0x
 /// the TTL is already healthy.
 const TTL_THRESHOLD: u32 = 100_000;
 const TTL_EXTEND_TO: u32 = 500_000;
+
+/// Number of ledgers a player has to call `reveal` before the wager can be
+/// reclaimed via `reclaim_wager`.  At ~5 s/ledger this is roughly 8 minutes.
+const REVEAL_TIMEOUT_LEDGERS: u32 = 100;
 
 /// Returns the gross payout multiplier (in basis points, 10_000 = 1x)
 /// for the given win `streak` level.
@@ -719,6 +707,7 @@ impl CoinflipContract {
             contract_random,
             fee_bps: config.fee_bps,
             phase: GamePhase::Committed,
+            start_ledger: env.ledger().sequence(),
         };
 
         Self::save_player_game(&env, &player, &game);
@@ -882,31 +871,6 @@ impl CoinflipContract {
         Ok(())
     }
 
-<<<<<<< feature/cash-out-stats
-    /// Cash out winnings after a successful reveal (computes payout and cleans up state).
-    ///
-    /// # Pre-Execution Invariants & Guards
-    /// 1. `NoActiveGame`               – The player must have an active game in storage.
-    ///                                   If `cash_out` is called twice, the second call fails here
-    ///                                   because the first call completely deletes the game state.
-    /// 2. `InvalidPhase`               – The game phase must be `Revealed`.
-    /// 3. `NoWinningsToClaimOrContinue`– The player's streak must be > 0 (they must have won).
-    ///                                   A losing reveal resets the streak to 0.
-    /// 4. `InsufficientReserves`       – The contract must have enough `reserve_balance` to
-    ///                                   cover the `net_payout` calculation.
-    ///
-    /// # Post-Execution Invariants & Accounting
-    /// - **Protocol Fee**: The `fee` portion is permanently added to `stats.total_fees`.
-    /// - **Reserve Deduction**: `stats.reserve_balance` is decremented by exactly `net_payout`.
-    /// - **State Cleanup**: The player's game state is completely DELETED from storage.
-    ///                      No residual state is left.
-    ///
-    /// # Edge Cases
-    /// - **Double Cash Out**: Prevented by `delete_player_game` causing subsequent calls
-    ///                        to fail with `NoActiveGame`.
-    /// - **Zero Payouts**: If the computed net payout ends up being zero (e.g., due to rounding
-    ///                     or zero wager), the state is still cleared and no reserves are deducted.
-=======
     /// Cash out winnings after a successful reveal (accounting-only, no token transfer).
     ///
     /// Settles the game by updating reserve and fee accounting without issuing
@@ -930,7 +894,6 @@ impl CoinflipContract {
     /// | `InvalidPhase`                 | Game is not in `Revealed` phase                  |
     /// | `NoWinningsToClaimOrContinue`  | `streak == 0` — loss state, nothing to cash out  |
     /// | `InsufficientReserves`         | Arithmetic overflow in payout calculation        |
->>>>>>> master
     pub fn cash_out(
         env: Env,
         player: Address,
@@ -1246,6 +1209,71 @@ impl CoinflipContract {
 
         Ok(())
     }
+
+    /// Reclaim a wager from a game that has exceeded the reveal timeout.
+    ///
+    /// If a player starts a game but never calls `reveal`, their wager is
+    /// locked in the contract indefinitely.  After `REVEAL_TIMEOUT_LEDGERS`
+    /// ledgers have elapsed since `start_game`, the player may call
+    /// `reclaim_wager` to recover their wager and clean up the game slot.
+    ///
+    /// # Timeout Invariant
+    ///
+    /// A game is considered expired when:
+    /// ```text
+    /// current_ledger >= game.start_ledger + REVEAL_TIMEOUT_LEDGERS
+    /// ```
+    ///
+    /// # Process (on success)
+    /// 1. Verify the player has a game in `Committed` phase.
+    /// 2. Verify the reveal window has expired.
+    /// 3. Credit the wager back to `reserve_balance` (house keeps the wager
+    ///    because the player failed to reveal — this prevents griefing by
+    ///    locking reserves indefinitely).
+    /// 4. Delete the player's game state to free the slot.
+    ///
+    /// # Arguments
+    /// - `player` – must authorize; must have a game in `Committed` phase
+    ///
+    /// # Returns
+    /// `Ok(wager)` — the reclaimed wager amount in stroops.
+    ///
+    /// # Errors
+    /// | Error           | Condition                                              |
+    /// |-----------------|--------------------------------------------------------|
+    /// | `NoActiveGame`  | No game record exists for `player`                     |
+    /// | `InvalidPhase`  | Game is not in `Committed` phase                       |
+    /// | `RevealTimeout` | Reveal window has **not** yet expired (too early)      |
+    pub fn reclaim_wager(env: Env, player: Address) -> Result<i128, Error> {
+        player.require_auth();
+
+        let game = Self::load_player_game(&env, &player)
+            .ok_or(Error::NoActiveGame)?;
+
+        // Only Committed games can time out — Revealed games must be settled normally.
+        if game.phase != GamePhase::Committed {
+            return Err(Error::InvalidPhase);
+        }
+
+        // Reject if the timeout window has not yet elapsed.
+        let current = env.ledger().sequence();
+        let expires_at = game.start_ledger.saturating_add(REVEAL_TIMEOUT_LEDGERS);
+        if current < expires_at {
+            return Err(Error::RevealTimeout);
+        }
+
+        // Credit wager to reserves and free the player slot.
+        let mut stats = Self::load_stats(&env);
+        stats.reserve_balance = stats
+            .reserve_balance
+            .checked_add(game.wager)
+            .unwrap_or(stats.reserve_balance);
+        Self::save_stats(&env, &stats);
+
+        Self::delete_player_game(&env, &player);
+
+        Ok(game.wager)
+    }
 }
 
 #[cfg(test)]
@@ -1543,6 +1571,7 @@ mod tests {
                     contract_random: env.crypto().sha256(&Bytes::from_slice(env, &[2u8; 32])).into(),
                     fee_bps,
                     phase: GamePhase::Revealed,
+                    start_ledger: 0,
                 };
                 CoinflipContract::save_player_game(env, &player, &game);
             });
@@ -1693,6 +1722,7 @@ mod tests {
             contract_random: dummy,
             fee_bps: 300,
             phase,
+            start_ledger: 0,
         };
         env.as_contract(contract_id, || {
             CoinflipContract::save_player_game(env, player, &game);
@@ -2380,6 +2410,7 @@ mod tests {
                 contract_random: dummy_commitment(&env),
                 fee_bps: 300,
                 phase: GamePhase::Revealed,
+                start_ledger: 0,
             };
             CoinflipContract::save_player_game(&env, &player, &game);
         });
@@ -4917,6 +4948,7 @@ mod cumulative_fee_tests {
             contract_random: dummy,
             fee_bps,
             phase: GamePhase::Revealed,
+            start_ledger: 0,
         };
         env.as_contract(contract_id, || {
             CoinflipContract::save_player_game(env, player, &game);
@@ -6392,6 +6424,7 @@ mod integration_tests {
                 contract_random: commitment, // deterministic stand-in
                 fee_bps: DEFAULT_FEE_BPS,
                 phase,
+                start_ledger: 0,
             };
             self.env.as_contract(&self.contract_id, || {
                 CoinflipContract::save_player_game(&self.env, player, &game);
