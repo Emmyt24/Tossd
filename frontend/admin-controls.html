@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tossd — Admin Controls</title>
+  <link rel="stylesheet" href="tokens/tossd.tokens.css" />
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-body);
+      font-size: var(--font-size-body);
+      background: var(--color-bg-base);
+      color: var(--color-fg-primary);
+      line-height: var(--line-height-normal);
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .admin-shell { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+    .admin-header {
+      background: var(--color-bg-surface);
+      border-bottom: 1px solid var(--color-border-default);
+      padding: var(--space-4) var(--space-8);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: var(--shadow-soft);
+    }
+    .admin-header__logo {
+      font-family: var(--font-display);
+      font-size: var(--font-size-h3);
+      font-weight: 700;
+      color: var(--color-fg-primary);
+      text-decoration: none;
+    }
+    .admin-header__badge {
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+      background: color-mix(in srgb, var(--color-state-warning) 12%, white);
+      color: var(--color-state-warning);
+      border: 1px solid color-mix(in srgb, var(--color-state-warning) 30%, white);
+      border-radius: var(--radius-pill);
+      padding: var(--space-1) var(--space-3);
+      letter-spacing: 0.04em;
+    }
+    .admin-main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: var(--space-8) var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+    }
+    .admin-page-title {
+      font-family: var(--font-display);
+      font-size: var(--font-size-h2);
+      font-weight: 600;
+      color: var(--color-fg-primary);
+    }
+    .admin-page-subtitle {
+      font-size: var(--font-size-sm);
+      color: var(--color-fg-secondary);
+      margin-top: var(--space-2);
+    }
+
+    /* ── Contract status bar ── */
+    .contract-status {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-6);
+      display: flex;
+      align-items: center;
+      gap: var(--space-6);
+      flex-wrap: wrap;
+      box-shadow: var(--shadow-soft);
+    }
+    .contract-status__item { display: flex; flex-direction: column; gap: 2px; }
+    .contract-status__label { font-size: var(--font-size-xs); color: var(--color-fg-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; }
+    .contract-status__value { font-family: var(--font-mono); font-size: var(--font-size-mono); font-weight: 600; color: var(--color-fg-primary); }
+    .contract-status__value--active { color: var(--color-state-success); }
+    .contract-status__value--paused { color: var(--color-state-danger); }
+
+    /* ── Admin cards ── */
+    .admin-card {
+      background: var(--color-bg-surface);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      box-shadow: var(--shadow-soft);
+    }
+    .admin-card--warning {
+      border-color: color-mix(in srgb, var(--color-state-warning) 40%, var(--color-border-default));
+      background: color-mix(in srgb, var(--color-state-warning) 4%, white);
+    }
+    .admin-card--danger {
+      border-color: color-mix(in srgb, var(--color-state-danger) 40%, var(--color-border-default));
+      background: color-mix(in srgb, var(--color-state-danger) 4%, white);
+    }
+    .admin-card__header { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-6); }
+    .admin-card__icon { flex-shrink: 0; width: 20px; height: 20px; margin-top: 2px; }
+    .admin-card__icon--warning { color: var(--color-state-warning); }
+    .admin-card__icon--danger { color: var(--color-state-danger); }
+    .admin-card__title { font-size: var(--font-size-h3); font-weight: 600; color: var(--color-fg-primary); }
+    .admin-card__desc { font-size: var(--font-size-sm); color: var(--color-fg-secondary); margin-top: var(--space-1); }
+
+    /* ── Inline warning notice ── */
+    .warning-notice {
+      display: flex;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      margin-bottom: var(--space-6);
+    }
+    .warning-notice--warning {
+      background: color-mix(in srgb, var(--color-state-warning) 10%, white);
+      border: 1px solid color-mix(in srgb, var(--color-state-warning) 30%, white);
+      color: color-mix(in srgb, var(--color-state-warning) 80%, black);
+    }
+    .warning-notice--danger {
+      background: color-mix(in srgb, var(--color-state-danger) 10%, white);
+      border: 1px solid color-mix(in srgb, var(--color-state-danger) 30%, white);
+      color: color-mix(in srgb, var(--color-state-danger) 80%, black);
+    }
+    .warning-notice__icon { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; }
+
+    /* ── Forms ── */
+    .form-grid { display: grid; gap: var(--space-4); }
+    .form-grid--2col { grid-template-columns: 1fr 1fr; }
+    .form-field { display: flex; flex-direction: column; gap: var(--space-2); }
+    .form-label { font-size: var(--font-size-sm); font-weight: 500; color: var(--color-fg-primary); }
+    .form-label__required { color: var(--color-state-danger); margin-left: 2px; }
+    .form-input {
+      height: 44px;
+      padding: 0 var(--space-3);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: var(--font-size-body);
+      color: var(--color-fg-primary);
+      background: var(--color-bg-surface);
+      transition: border-color var(--motion-fast) var(--ease-standard),
+                  box-shadow var(--motion-fast) var(--ease-standard);
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-focus-ring);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 20%, transparent);
+    }
+    .form-input--mono { font-family: var(--font-mono); font-size: var(--font-size-mono); }
+    .form-input[readonly] { background: var(--color-bg-subtle); color: var(--color-fg-secondary); cursor: default; }
+    .form-hint { font-size: var(--font-size-xs); color: var(--color-fg-muted); }
+    .form-error { font-size: var(--font-size-xs); color: var(--color-state-danger); display: none; }
+    .form-error[aria-live] { display: block; }
+    .form-actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-6); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+      min-height: 44px; padding: 0 var(--space-6);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body); font-size: var(--font-size-sm); font-weight: 600;
+      cursor: pointer; border: 1px solid transparent;
+      transition: all var(--motion-base) var(--ease-standard);
+      text-decoration: none;
+    }
+    .btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 30%, transparent);
+    }
+    .btn:disabled, .btn[aria-disabled="true"] {
+      opacity: 0.45; cursor: not-allowed; pointer-events: none;
+    }
+    .btn-primary { background: var(--color-brand-ink); color: var(--color-bg-surface); border-color: var(--color-brand-ink); }
+    .btn-primary:hover { background: color-mix(in srgb, var(--color-brand-ink) 85%, white); }
+    .btn-secondary { background: transparent; color: var(--color-fg-primary); border-color: var(--color-border-strong); }
+    .btn-secondary:hover { background: var(--color-bg-subtle); }
+    .btn-warning { background: var(--color-state-warning); color: #fff; border-color: var(--color-state-warning); }
+    .btn-warning:hover { background: color-mix(in srgb, var(--color-state-warning) 85%, black); }
+    .btn-danger { background: var(--color-state-danger); color: #fff; border-color: var(--color-state-danger); }
+    .btn-danger:hover { background: color-mix(in srgb, var(--color-state-danger) 85%, black); }
+
+    /* ── Pause toggle ── */
+    .pause-toggle { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+    .pause-toggle .btn { flex: 1; min-width: 160px; }
+
+    /* ── Feedback banners ── */
+    .feedback-banner {
+      display: none;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-sm);
+      margin-top: var(--space-4);
+    }
+    .feedback-banner.is-visible { display: flex; }
+    .feedback-banner--success {
+      background: color-mix(in srgb, var(--color-state-success) 10%, white);
+      border: 1px solid color-mix(in srgb, var(--color-state-success) 30%, white);
+      color: color-mix(in srgb, var(--color-state-success) 80%, black);
+    }
+    .feedback-banner--error {
+      background: color-mix(in srgb, var(--color-state-danger) 10%, white);
+      border: 1px solid color-mix(in srgb, var(--color-state-danger) 30%, white);
+      color: color-mix(in srgb, var(--color-state-danger) 80%, black);
+    }
+    .feedback-banner__icon { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; }
+
+    /* ── Modals ── */
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(23, 23, 23, 0.55);
+      z-index: 100;
+      align-items: center; justify-content: center;
+      padding: var(--space-6);
+    }
+    .modal-backdrop.is-open { display: flex; }
+    .modal {
+      background: var(--color-bg-surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      max-width: 480px;
+      width: 100%;
+      padding: var(--space-8);
+      position: relative;
+    }
+    .modal--danger { border-top: 4px solid var(--color-state-danger); }
+    .modal--warning { border-top: 4px solid var(--color-state-warning); }
+    .modal__icon-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .modal__icon { width: 28px; height: 28px; }
+    .modal__icon--danger { color: var(--color-state-danger); }
+    .modal__icon--warning { color: var(--color-state-warning); }
+    .modal__title { font-size: var(--font-size-h3); font-weight: 600; color: var(--color-fg-primary); }
+    .modal__body { font-size: var(--font-size-sm); color: var(--color-fg-secondary); line-height: var(--line-height-relaxed); margin-bottom: var(--space-6); }
+    .modal__change-summary {
+      background: var(--color-bg-subtle);
+      border: 1px solid var(--color-border-default);
+      border-radius: var(--radius-sm);
+      padding: var(--space-3) var(--space-4);
+      font-family: var(--font-mono);
+      font-size: var(--font-size-mono);
+      color: var(--color-fg-primary);
+      margin-bottom: var(--space-6);
+    }
+    .modal__change-summary dt { font-size: var(--font-size-xs); color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: var(--space-2); }
+    .modal__change-summary dt:first-child { margin-top: 0; }
+    .modal__change-summary dd { font-weight: 600; }
+    .modal__actions { display: flex; gap: var(--space-3); justify-content: flex-end; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .admin-main { padding: var(--space-6) var(--space-4); }
+      .form-grid--2col { grid-template-columns: 1fr; }
+      .modal__actions { flex-direction: column-reverse; }
+      .modal__actions .btn { width: 100%; }
+      .contract-status { gap: var(--space-4); }
+    }
+
+    /* ── Reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="admin-shell">
+
+  <!-- ── Header ── -->
+  <header class="admin-header">
+    <a href="#" class="admin-header__logo">Tossd</a>
+    <span class="admin-header__badge">Admin Panel</span>
+  </header>
+
+  <!-- ── Main content ── -->
+  <main class="admin-main" id="main-content">
+
+    <!-- Page heading -->
+    <div>
+      <h1 class="admin-page-title">Admin Controls</h1>
+      <p class="admin-page-subtitle">Manage protocol parameters. All destructive actions require confirmation.</p>
+    </div>
+
+    <!-- Contract status bar -->
+    <section aria-label="Contract status">
+      <div class="contract-status">
+        <div class="contract-status__item">
+          <span class="contract-status__label">Status</span>
+          <span class="contract-status__value contract-status__value--active" id="status-value">Active</span>
+        </div>
+        <div class="contract-status__item">
+          <span class="contract-status__label">Fee</span>
+          <span class="contract-status__value" id="current-fee-display">3.00%</span>
+        </div>
+        <div class="contract-status__item">
+          <span class="contract-status__label">Min Wager</span>
+          <span class="contract-status__value" id="current-min-display">1,000,000 stroops</span>
+        </div>
+        <div class="contract-status__item">
+          <span class="contract-status__label">Max Wager</span>
+          <span class="contract-status__value" id="current-max-display">100,000,000 stroops</span>
+        </div>
+        <div class="contract-status__item">
+          <span class="contract-status__label">Reserve</span>
+          <span class="contract-status__value" id="current-reserve-display">1,200,000,000 stroops</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 1. Fee Management ── -->
+    <section aria-labelledby="fee-heading">
+      <div class="admin-card admin-card--warning">
+        <div class="admin-card__header">
+          <!-- Warning icon -->
+          <svg class="admin-card__icon admin-card__icon--warning" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M10 3L18 17H2L10 3Z" stroke-linejoin="round"/>
+            <line x1="10" y1="9" x2="10" y2="13"/>
+            <circle cx="10" cy="15.5" r="0.75" fill="currentColor" stroke="none"/>
+          </svg>
+          <div>
+            <h2 class="admin-card__title" id="fee-heading">Fee Management</h2>
+            <p class="admin-card__desc">Update the protocol fee percentage. Applies to new games only.</p>
+          </div>
+        </div>
+
+        <div class="warning-notice warning-notice--warning" role="note">
+          <svg class="warning-notice__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M8 2L15 14H1L8 2Z" stroke-linejoin="round"/>
+            <line x1="8" y1="7" x2="8" y2="10.5"/>
+            <circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>Fee changes only affect games started after this update. In-flight games settle at their original rate.</span>
+        </div>
+
+        <form id="fee-form" novalidate>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label" for="current-fee">Current Fee</label>
+              <input class="form-input form-input--mono" id="current-fee" type="text" value="300 bps (3.00%)" readonly aria-readonly="true" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="new-fee">
+                New Fee (bps)<span class="form-label__required" aria-hidden="true">*</span>
+              </label>
+              <input class="form-input form-input--mono" id="new-fee" type="number"
+                min="0" max="500" step="1" placeholder="e.g. 250"
+                aria-required="true" aria-describedby="new-fee-hint new-fee-error" />
+              <span class="form-hint" id="new-fee-hint">0–500 bps (0–5%). Current: 300 bps.</span>
+              <span class="form-error" id="new-fee-error" role="alert"></span>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-warning" id="fee-submit-btn">Update Fee</button>
+          </div>
+        </form>
+
+        <div class="feedback-banner feedback-banner--success" id="fee-success" role="status" aria-live="polite">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 8l2 2 4-4"/>
+          </svg>
+          <span id="fee-success-msg">Fee updated successfully.</span>
+        </div>
+        <div class="feedback-banner feedback-banner--error" id="fee-error" role="alert" aria-live="assertive">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 5l6 6M11 5l-6 6"/>
+          </svg>
+          <span id="fee-error-msg">Transaction failed. Please try again.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 2. Wager Limits ── -->
+    <section aria-labelledby="limits-heading">
+      <div class="admin-card admin-card--warning">
+        <div class="admin-card__header">
+          <svg class="admin-card__icon admin-card__icon--warning" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M10 3L18 17H2L10 3Z" stroke-linejoin="round"/>
+            <line x1="10" y1="9" x2="10" y2="13"/>
+            <circle cx="10" cy="15.5" r="0.75" fill="currentColor" stroke="none"/>
+          </svg>
+          <div>
+            <h2 class="admin-card__title" id="limits-heading">Wager Limits</h2>
+            <p class="admin-card__desc">Set minimum and maximum wager amounts. Affects reserve solvency exposure.</p>
+          </div>
+        </div>
+
+        <div class="warning-notice warning-notice--warning" role="note">
+          <svg class="warning-notice__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M8 2L15 14H1L8 2Z" stroke-linejoin="round"/>
+            <line x1="8" y1="7" x2="8" y2="10.5"/>
+            <circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>Increasing the maximum wager increases reserve exposure. Ensure reserve covers at least 10× the new maximum before confirming.</span>
+        </div>
+
+        <form id="limits-form" novalidate>
+          <div class="form-grid form-grid--2col">
+            <div class="form-field">
+              <label class="form-label" for="current-min">Current Min Wager</label>
+              <input class="form-input form-input--mono" id="current-min" type="text" value="1,000,000 stroops" readonly aria-readonly="true" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="current-max">Current Max Wager</label>
+              <input class="form-input form-input--mono" id="current-max" type="text" value="100,000,000 stroops" readonly aria-readonly="true" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="new-min">
+                New Min Wager (stroops)<span class="form-label__required" aria-hidden="true">*</span>
+              </label>
+              <input class="form-input form-input--mono" id="new-min" type="number"
+                min="1" step="1" placeholder="e.g. 1000000"
+                aria-required="true" aria-describedby="new-min-hint new-min-error" />
+              <span class="form-hint" id="new-min-hint">Must be &gt; 0 and less than max.</span>
+              <span class="form-error" id="new-min-error" role="alert"></span>
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="new-max">
+                New Max Wager (stroops)<span class="form-label__required" aria-hidden="true">*</span>
+              </label>
+              <input class="form-input form-input--mono" id="new-max" type="number"
+                min="1" step="1" placeholder="e.g. 100000000"
+                aria-required="true" aria-describedby="new-max-hint new-max-error" />
+              <span class="form-hint" id="new-max-hint">Must be &gt; min. Reserve should be ≥ max × 10.</span>
+              <span class="form-error" id="new-max-error" role="alert"></span>
+            </div>
+          </div>
+
+          <!-- Reserve solvency danger notice — shown dynamically -->
+          <div class="warning-notice warning-notice--danger" id="reserve-solvency-warning" role="alert" aria-live="assertive" style="display:none; margin-top: var(--space-4);">
+            <svg class="warning-notice__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+              <path d="M8 2L15 14H1L8 2Z" stroke-linejoin="round"/>
+              <line x1="8" y1="7" x2="8" y2="10.5"/>
+              <circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+            </svg>
+            <span id="reserve-solvency-msg">Reserve balance may be insufficient for the new maximum wager. Top up reserves before proceeding.</span>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-warning" id="limits-submit-btn">Update Limits</button>
+          </div>
+        </form>
+
+        <div class="feedback-banner feedback-banner--success" id="limits-success" role="status" aria-live="polite">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 8l2 2 4-4"/>
+          </svg>
+          <span>Wager limits updated successfully.</span>
+        </div>
+        <div class="feedback-banner feedback-banner--error" id="limits-error" role="alert" aria-live="assertive">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 5l6 6M11 5l-6 6"/>
+          </svg>
+          <span id="limits-error-msg">Transaction failed. Please try again.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 3. Treasury Address ── -->
+    <section aria-labelledby="treasury-heading">
+      <div class="admin-card admin-card--danger">
+        <div class="admin-card__header">
+          <svg class="admin-card__icon admin-card__icon--danger" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M10 3L18 17H2L10 3Z" stroke-linejoin="round"/>
+            <line x1="10" y1="9" x2="10" y2="13"/>
+            <circle cx="10" cy="15.5" r="0.75" fill="currentColor" stroke="none"/>
+          </svg>
+          <div>
+            <h2 class="admin-card__title" id="treasury-heading">Treasury Address</h2>
+            <p class="admin-card__desc">Update the address that receives protocol fees. Fees sent to an incorrect address are unrecoverable.</p>
+          </div>
+        </div>
+
+        <div class="warning-notice warning-notice--danger" role="note">
+          <svg class="warning-notice__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M8 2L15 14H1L8 2Z" stroke-linejoin="round"/>
+            <line x1="8" y1="7" x2="8" y2="10.5"/>
+            <circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>Verify the new address carefully. Fees redirected to an incorrect address cannot be recovered from within the contract.</span>
+        </div>
+
+        <form id="treasury-form" novalidate>
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label" for="current-treasury">Current Treasury Address</label>
+              <input class="form-input form-input--mono" id="current-treasury" type="text"
+                value="GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                readonly aria-readonly="true" />
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="new-treasury">
+                New Treasury Address<span class="form-label__required" aria-hidden="true">*</span>
+              </label>
+              <input class="form-input form-input--mono" id="new-treasury" type="text"
+                placeholder="G..."
+                maxlength="56"
+                aria-required="true" aria-describedby="new-treasury-hint new-treasury-error" />
+              <span class="form-hint" id="new-treasury-hint">Stellar public key (G..., 56 characters). Must not be the admin address.</span>
+              <span class="form-error" id="new-treasury-error" role="alert"></span>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-danger" id="treasury-submit-btn">Update Treasury</button>
+          </div>
+        </form>
+
+        <div class="feedback-banner feedback-banner--success" id="treasury-success" role="status" aria-live="polite">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 8l2 2 4-4"/>
+          </svg>
+          <span>Treasury address updated successfully.</span>
+        </div>
+        <div class="feedback-banner feedback-banner--error" id="treasury-error" role="alert" aria-live="assertive">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 5l6 6M11 5l-6 6"/>
+          </svg>
+          <span id="treasury-error-msg">Transaction failed. Please try again.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 4. Pause Control ── -->
+    <section aria-labelledby="pause-heading">
+      <div class="admin-card admin-card--danger" id="pause-card">
+        <div class="admin-card__header">
+          <svg class="admin-card__icon admin-card__icon--danger" aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75">
+            <circle cx="10" cy="10" r="8"/>
+            <line x1="7" y1="7" x2="7" y2="13"/>
+            <line x1="13" y1="7" x2="13" y2="13"/>
+          </svg>
+          <div>
+            <h2 class="admin-card__title" id="pause-heading">Pause Control</h2>
+            <p class="admin-card__desc">Halt or resume new game creation. Use only during security incidents or maintenance.</p>
+          </div>
+        </div>
+
+        <div class="warning-notice warning-notice--danger" role="note">
+          <svg class="warning-notice__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75">
+            <path d="M8 2L15 14H1L8 2Z" stroke-linejoin="round"/>
+            <line x1="8" y1="7" x2="8" y2="10.5"/>
+            <circle cx="8" cy="12.5" r="0.6" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>Pausing immediately blocks all new games. In-flight games continue to settle. Only unpause when the incident is fully resolved.</span>
+        </div>
+
+        <div class="pause-toggle">
+          <button type="button" class="btn btn-danger" id="pause-btn"
+            aria-describedby="pause-btn-desc">
+            Pause Contract
+          </button>
+          <button type="button" class="btn btn-secondary" id="unpause-btn"
+            disabled aria-disabled="true" aria-describedby="unpause-btn-desc">
+            Unpause Contract
+          </button>
+        </div>
+        <p class="form-hint" id="pause-btn-desc" style="margin-top: var(--space-3);">Blocks new game creation immediately.</p>
+        <p class="form-hint" id="unpause-btn-desc" style="margin-top: var(--space-1);">Disabled — contract is currently active.</p>
+
+        <div class="feedback-banner feedback-banner--success" id="pause-success" role="status" aria-live="polite">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 8l2 2 4-4"/>
+          </svg>
+          <span id="pause-success-msg">Contract paused. New games are blocked.</span>
+        </div>
+        <div class="feedback-banner feedback-banner--error" id="pause-error" role="alert" aria-live="assertive">
+          <svg class="feedback-banner__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="8" r="7"/><path d="M5 5l6 6M11 5l-6 6"/>
+          </svg>
+          <span id="pause-error-msg">Transaction failed. Please try again.</span>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /admin-main -->
+</div><!-- /admin-shell -->
+
+<!-- ══════════════════════════════════════════════
+     CONFIRMATION MODALS
+     Each modal: role="dialog", aria-modal, focus trap, Escape to close
+     ══════════════════════════════════════════════ -->
+
+<!-- Fee confirmation modal -->
+<div class="modal-backdrop" id="modal-fee-backdrop" role="dialog" aria-modal="true"
+  aria-labelledby="modal-fee-title" aria-describedby="modal-fee-desc">
+  <div class="modal modal--warning">
+    <div class="modal__icon-row">
+      <svg class="modal__icon modal__icon--warning" aria-hidden="true" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.75">
+        <path d="M14 4L26 24H2L14 4Z" stroke-linejoin="round"/>
+        <line x1="14" y1="12" x2="14" y2="18"/>
+        <circle cx="14" cy="21" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+      <h3 class="modal__title" id="modal-fee-title">Confirm Fee Update</h3>
+    </div>
+    <p class="modal__body" id="modal-fee-desc">
+      Changing the fee will apply to all new games started after this update.
+      Games currently in progress will settle at their original fee rate.
+      This action is logged onchain and cannot be silently reversed.
+    </p>
+    <dl class="modal__change-summary" id="fee-change-summary">
+      <dt>Current fee</dt><dd id="modal-fee-from">300 bps (3.00%)</dd>
+      <dt>New fee</dt><dd id="modal-fee-to">—</dd>
+    </dl>
+    <div class="modal__actions">
+      <button type="button" class="btn btn-secondary" id="modal-fee-cancel">Cancel</button>
+      <button type="button" class="btn btn-warning" id="modal-fee-confirm">Confirm Fee Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- Wager limits confirmation modal -->
+<div class="modal-backdrop" id="modal-limits-backdrop" role="dialog" aria-modal="true"
+  aria-labelledby="modal-limits-title" aria-describedby="modal-limits-desc">
+  <div class="modal modal--warning">
+    <div class="modal__icon-row">
+      <svg class="modal__icon modal__icon--warning" aria-hidden="true" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.75">
+        <path d="M14 4L26 24H2L14 4Z" stroke-linejoin="round"/>
+        <line x1="14" y1="12" x2="14" y2="18"/>
+        <circle cx="14" cy="21" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+      <h3 class="modal__title" id="modal-limits-title">Confirm Wager Limit Update</h3>
+    </div>
+    <p class="modal__body" id="modal-limits-desc">
+      Updating wager limits changes the range of bets players can place.
+      Increasing the maximum wager increases reserve exposure.
+      Ensure reserve balance covers at least 10× the new maximum wager.
+    </p>
+    <dl class="modal__change-summary" id="limits-change-summary">
+      <dt>New min wager</dt><dd id="modal-limits-min">—</dd>
+      <dt>New max wager</dt><dd id="modal-limits-max">—</dd>
+      <dt>Required reserve (10×)</dt><dd id="modal-limits-reserve">—</dd>
+    </dl>
+    <div class="modal__actions">
+      <button type="button" class="btn btn-secondary" id="modal-limits-cancel">Cancel</button>
+      <button type="button" class="btn btn-warning" id="modal-limits-confirm">Confirm Limit Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- Treasury confirmation modal -->
+<div class="modal-backdrop" id="modal-treasury-backdrop" role="dialog" aria-modal="true"
+  aria-labelledby="modal-treasury-title" aria-describedby="modal-treasury-desc">
+  <div class="modal modal--danger">
+    <div class="modal__icon-row">
+      <svg class="modal__icon modal__icon--danger" aria-hidden="true" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.75">
+        <path d="M14 4L26 24H2L14 4Z" stroke-linejoin="round"/>
+        <line x1="14" y1="12" x2="14" y2="18"/>
+        <circle cx="14" cy="21" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+      <h3 class="modal__title" id="modal-treasury-title">Confirm Treasury Update</h3>
+    </div>
+    <p class="modal__body" id="modal-treasury-desc">
+      Changing the treasury address will redirect all future protocol fees to the new address.
+      Fees sent to an incorrect address are unrecoverable from within the contract.
+      Verify the address carefully before confirming.
+    </p>
+    <dl class="modal__change-summary" id="treasury-change-summary">
+      <dt>Current treasury</dt><dd id="modal-treasury-from" style="word-break:break-all;">—</dd>
+      <dt>New treasury</dt><dd id="modal-treasury-to" style="word-break:break-all;">—</dd>
+    </dl>
+    <div class="modal__actions">
+      <button type="button" class="btn btn-secondary" id="modal-treasury-cancel">Cancel</button>
+      <button type="button" class="btn btn-danger" id="modal-treasury-confirm">Confirm Treasury Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pause confirmation modal -->
+<div class="modal-backdrop" id="modal-pause-backdrop" role="dialog" aria-modal="true"
+  aria-labelledby="modal-pause-title" aria-describedby="modal-pause-desc">
+  <div class="modal modal--danger">
+    <div class="modal__icon-row">
+      <svg class="modal__icon modal__icon--danger" aria-hidden="true" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.75">
+        <circle cx="14" cy="14" r="11"/>
+        <line x1="10" y1="10" x2="10" y2="18"/>
+        <line x1="18" y1="10" x2="18" y2="18"/>
+      </svg>
+      <h3 class="modal__title" id="modal-pause-title">Confirm Pause Contract</h3>
+    </div>
+    <p class="modal__body" id="modal-pause-desc">
+      Pausing the contract will immediately prevent new games from starting.
+      Players with active games can still reveal and settle.
+      Use this only during security incidents or emergency maintenance.
+    </p>
+    <dl class="modal__change-summary">
+      <dt>Effect</dt><dd>New game creation blocked immediately</dd>
+      <dt>In-flight games</dt><dd>Continue to settle normally</dd>
+      <dt>Reversible</dt><dd>Yes — unpause when incident is resolved</dd>
+    </dl>
+    <div class="modal__actions">
+      <button type="button" class="btn btn-secondary" id="modal-pause-cancel">Cancel</button>
+      <button type="button" class="btn btn-danger" id="modal-pause-confirm">Confirm Pause Contract</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unpause confirmation modal -->
+<div class="modal-backdrop" id="modal-unpause-backdrop" role="dialog" aria-modal="true"
+  aria-labelledby="modal-unpause-title" aria-describedby="modal-unpause-desc">
+  <div class="modal modal--warning">
+    <div class="modal__icon-row">
+      <svg class="modal__icon modal__icon--warning" aria-hidden="true" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.75">
+        <circle cx="14" cy="14" r="11"/>
+        <path d="M10 10l8 4-8 4V10Z" fill="currentColor" stroke="none"/>
+      </svg>
+      <h3 class="modal__title" id="modal-unpause-title">Confirm Unpause Contract</h3>
+    </div>
+    <p class="modal__body" id="modal-unpause-desc">
+      Unpausing the contract will allow new games to start.
+      Confirm that the incident or maintenance window is fully resolved before proceeding.
+    </p>
+    <dl class="modal__change-summary">
+      <dt>Effect</dt><dd>New game creation re-enabled</dd>
+      <dt>Prerequisite</dt><dd>Incident or maintenance must be fully resolved</dd>
+    </dl>
+    <div class="modal__actions">
+      <button type="button" class="btn btn-secondary" id="modal-unpause-cancel">Cancel</button>
+      <button type="button" class="btn btn-warning" id="modal-unpause-confirm">Confirm Unpause Contract</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Utility: focus trap for modals ──────────────────────────────────────────
+function trapFocus(modal) {
+  const focusable = modal.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  modal.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Tab') {
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    if (e.key === 'Escape') { closeModal(modal); }
+  });
+}
+
+let _lastTrigger = null;
+
+function openModal(backdrop, triggerEl) {
+  _lastTrigger = triggerEl || null;
+  backdrop.classList.add('is-open');
+  // Focus first focusable element (Cancel) to prevent accidental confirm
+  const firstBtn = backdrop.querySelector('.btn-secondary');
+  if (firstBtn) firstBtn.focus();
+  trapFocus(backdrop);
+}
+
+function closeModal(backdrop) {
+  backdrop.classList.remove('is-open');
+  if (_lastTrigger) { _lastTrigger.focus(); _lastTrigger = null; }
+}
+
+// ── Utility: show/hide feedback banners ─────────────────────────────────────
+function showFeedback(el, autoDismissMs) {
+  el.classList.add('is-visible');
+  if (autoDismissMs) setTimeout(() => el.classList.remove('is-visible'), autoDismissMs);
+}
+function hideFeedback(el) { el.classList.remove('is-visible'); }
+
+// ── Utility: inline validation ───────────────────────────────────────────────
+function setError(inputEl, errorEl, msg) {
+  errorEl.textContent = msg;
+  errorEl.style.display = 'block';
+  inputEl.setAttribute('aria-invalid', 'true');
+}
+function clearError(inputEl, errorEl) {
+  errorEl.textContent = '';
+  errorEl.style.display = 'none';
+  inputEl.removeAttribute('aria-invalid');
+}
+
+// ── Contract state (demo values — replace with real contract reads) ──────────
+const contractState = {
+  paused: false,
+  feeBps: 300,
+  minWager: 1_000_000,
+  maxWager: 100_000_000,
+  reserveBalance: 1_200_000_000,
+  treasury: 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+  admin: 'GADMINXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+};
+
+// ── Sync UI to contract state ────────────────────────────────────────────────
+function syncStatusBar() {
+  document.getElementById('status-value').textContent = contractState.paused ? 'Paused' : 'Active';
+  document.getElementById('status-value').className =
+    'contract-status__value ' + (contractState.paused ? 'contract-status__value--paused' : 'contract-status__value--active');
+  document.getElementById('current-fee-display').textContent =
+    contractState.feeBps + ' bps (' + (contractState.feeBps / 100).toFixed(2) + '%)';
+  document.getElementById('current-min-display').textContent =
+    contractState.minWager.toLocaleString() + ' stroops';
+  document.getElementById('current-max-display').textContent =
+    contractState.maxWager.toLocaleString() + ' stroops';
+  document.getElementById('current-reserve-display').textContent =
+    contractState.reserveBalance.toLocaleString() + ' stroops';
+}
+
+function syncPauseButtons() {
+  const pauseBtn = document.getElementById('pause-btn');
+  const unpauseBtn = document.getElementById('unpause-btn');
+  const unpauseDesc = document.getElementById('unpause-btn-desc');
+  const pauseDesc = document.getElementById('pause-btn-desc');
+
+  if (contractState.paused) {
+    pauseBtn.disabled = true; pauseBtn.setAttribute('aria-disabled', 'true');
+    unpauseBtn.disabled = false; unpauseBtn.removeAttribute('aria-disabled');
+    unpauseDesc.textContent = 'Re-enables new game creation.';
+    pauseDesc.textContent = 'Disabled — contract is already paused.';
+  } else {
+    pauseBtn.disabled = false; pauseBtn.removeAttribute('aria-disabled');
+    unpauseBtn.disabled = true; unpauseBtn.setAttribute('aria-disabled', 'true');
+    pauseDesc.textContent = 'Blocks new game creation immediately.';
+    unpauseDesc.textContent = 'Disabled — contract is currently active.';
+  }
+}
+
+syncStatusBar();
+syncPauseButtons();
+
+// ── 1. Fee form ──────────────────────────────────────────────────────────────
+const feeForm = document.getElementById('fee-form');
+const newFeeInput = document.getElementById('new-fee');
+const newFeeError = document.getElementById('new-fee-error');
+const feeBackdrop = document.getElementById('modal-fee-backdrop');
+
+feeForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+  hideFeedback(document.getElementById('fee-success'));
+  hideFeedback(document.getElementById('fee-error'));
+  clearError(newFeeInput, newFeeError);
+
+  const val = parseInt(newFeeInput.value, 10);
+  if (isNaN(val) || val < 0 || val > 500) {
+    setError(newFeeInput, newFeeError, 'Fee must be between 0 and 500 bps (0–5%).');
+    newFeeInput.focus(); return;
+  }
+  if (val === contractState.feeBps) {
+    setError(newFeeInput, newFeeError, 'New fee must differ from the current fee.');
+    newFeeInput.focus(); return;
+  }
+
+  document.getElementById('modal-fee-from').textContent =
+    contractState.feeBps + ' bps (' + (contractState.feeBps / 100).toFixed(2) + '%)';
+  document.getElementById('modal-fee-to').textContent =
+    val + ' bps (' + (val / 100).toFixed(2) + '%)';
+  openModal(feeBackdrop, document.getElementById('fee-submit-btn'));
+});
+
+document.getElementById('modal-fee-cancel').addEventListener('click', () => closeModal(feeBackdrop));
+document.getElementById('modal-fee-confirm').addEventListener('click', function() {
+  closeModal(feeBackdrop);
+  // Simulate contract call — replace with real Soroban invocation
+  const val = parseInt(newFeeInput.value, 10);
+  contractState.feeBps = val;
+  syncStatusBar();
+  document.getElementById('current-fee').value = val + ' bps (' + (val / 100).toFixed(2) + '%)';
+  newFeeInput.value = '';
+  document.getElementById('fee-success-msg').textContent =
+    'Fee updated to ' + val + ' bps (' + (val / 100).toFixed(2) + '%).';
+  showFeedback(document.getElementById('fee-success'), 6000);
+});
+
+// ── 2. Wager limits form ─────────────────────────────────────────────────────
+const limitsForm = document.getElementById('limits-form');
+const newMinInput = document.getElementById('new-min');
+const newMaxInput = document.getElementById('new-max');
+const newMinError = document.getElementById('new-min-error');
+const newMaxError = document.getElementById('new-max-error');
+const limitsBackdrop = document.getElementById('modal-limits-backdrop');
+const reserveWarning = document.getElementById('reserve-solvency-warning');
+
+function checkReserveSolvency() {
+  const maxVal = parseInt(newMaxInput.value, 10);
+  if (!isNaN(maxVal) && maxVal > 0) {
+    const required = maxVal * 10;
+    if (required > contractState.reserveBalance) {
+      document.getElementById('reserve-solvency-msg').textContent =
+        'Reserve (' + contractState.reserveBalance.toLocaleString() + ' stroops) is below required ' +
+        required.toLocaleString() + ' stroops (10× new max). Top up before proceeding.';
+      reserveWarning.style.display = 'flex';
+    } else {
+      reserveWarning.style.display = 'none';
+    }
+  } else {
+    reserveWarning.style.display = 'none';
+  }
+}
+newMaxInput.addEventListener('input', checkReserveSolvency);
+
+limitsForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+  hideFeedback(document.getElementById('limits-success'));
+  hideFeedback(document.getElementById('limits-error'));
+  clearError(newMinInput, newMinError);
+  clearError(newMaxInput, newMaxError);
+
+  const minVal = parseInt(newMinInput.value, 10);
+  const maxVal = parseInt(newMaxInput.value, 10);
+  let valid = true;
+
+  if (isNaN(minVal) || minVal < 1) {
+    setError(newMinInput, newMinError, 'Minimum wager must be greater than 0.'); valid = false;
+  }
+  if (isNaN(maxVal) || maxVal < 1) {
+    setError(newMaxInput, newMaxError, 'Maximum wager must be greater than 0.'); valid = false;
+  }
+  if (valid && maxVal <= minVal) {
+    setError(newMaxInput, newMaxError, 'Maximum wager must be greater than minimum wager.'); valid = false;
+  }
+  if (!valid) { newMinInput.focus(); return; }
+
+  document.getElementById('modal-limits-min').textContent = minVal.toLocaleString() + ' stroops';
+  document.getElementById('modal-limits-max').textContent = maxVal.toLocaleString() + ' stroops';
+  document.getElementById('modal-limits-reserve').textContent = (maxVal * 10).toLocaleString() + ' stroops';
+  openModal(limitsBackdrop, document.getElementById('limits-submit-btn'));
+});
+
+document.getElementById('modal-limits-cancel').addEventListener('click', () => closeModal(limitsBackdrop));
+document.getElementById('modal-limits-confirm').addEventListener('click', function() {
+  closeModal(limitsBackdrop);
+  const minVal = parseInt(newMinInput.value, 10);
+  const maxVal = parseInt(newMaxInput.value, 10);
+  contractState.minWager = minVal;
+  contractState.maxWager = maxVal;
+  syncStatusBar();
+  document.getElementById('current-min').value = minVal.toLocaleString() + ' stroops';
+  document.getElementById('current-max').value = maxVal.toLocaleString() + ' stroops';
+  newMinInput.value = ''; newMaxInput.value = '';
+  reserveWarning.style.display = 'none';
+  showFeedback(document.getElementById('limits-success'), 6000);
+});
+
+// ── 3. Treasury form ─────────────────────────────────────────────────────────
+const treasuryForm = document.getElementById('treasury-form');
+const newTreasuryInput = document.getElementById('new-treasury');
+const newTreasuryError = document.getElementById('new-treasury-error');
+const treasuryBackdrop = document.getElementById('modal-treasury-backdrop');
+
+function isValidStellarAddress(addr) {
+  return /^G[A-Z2-7]{55}$/.test(addr);
+}
+
+treasuryForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+  hideFeedback(document.getElementById('treasury-success'));
+  hideFeedback(document.getElementById('treasury-error'));
+  clearError(newTreasuryInput, newTreasuryError);
+
+  const val = newTreasuryInput.value.trim();
+  if (!isValidStellarAddress(val)) {
+    setError(newTreasuryInput, newTreasuryError, 'Must be a valid Stellar public key (G..., 56 characters).');
+    newTreasuryInput.focus(); return;
+  }
+  if (val === contractState.admin) {
+    setError(newTreasuryInput, newTreasuryError, 'Treasury address must not be the same as the admin address.');
+    newTreasuryInput.focus(); return;
+  }
+  if (val === contractState.treasury) {
+    setError(newTreasuryInput, newTreasuryError, 'New treasury address must differ from the current address.');
+    newTreasuryInput.focus(); return;
+  }
+
+  document.getElementById('modal-treasury-from').textContent = contractState.treasury;
+  document.getElementById('modal-treasury-to').textContent = val;
+  openModal(treasuryBackdrop, document.getElementById('treasury-submit-btn'));
+});
+
+document.getElementById('modal-treasury-cancel').addEventListener('click', () => closeModal(treasuryBackdrop));
+document.getElementById('modal-treasury-confirm').addEventListener('click', function() {
+  closeModal(treasuryBackdrop);
+  const val = newTreasuryInput.value.trim();
+  contractState.treasury = val;
+  document.getElementById('current-treasury').value = val;
+  newTreasuryInput.value = '';
+  showFeedback(document.getElementById('treasury-success'), 6000);
+});
+
+// ── 4. Pause / Unpause ───────────────────────────────────────────────────────
+const pauseBackdrop = document.getElementById('modal-pause-backdrop');
+const unpauseBackdrop = document.getElementById('modal-unpause-backdrop');
+
+document.getElementById('pause-btn').addEventListener('click', function() {
+  openModal(pauseBackdrop, this);
+});
+document.getElementById('modal-pause-cancel').addEventListener('click', () => closeModal(pauseBackdrop));
+document.getElementById('modal-pause-confirm').addEventListener('click', function() {
+  closeModal(pauseBackdrop);
+  contractState.paused = true;
+  syncStatusBar(); syncPauseButtons();
+  document.getElementById('pause-success-msg').textContent = 'Contract paused. New games are blocked.';
+  showFeedback(document.getElementById('pause-success'), 6000);
+});
+
+document.getElementById('unpause-btn').addEventListener('click', function() {
+  openModal(unpauseBackdrop, this);
+});
+document.getElementById('modal-unpause-cancel').addEventListener('click', () => closeModal(unpauseBackdrop));
+document.getElementById('modal-unpause-confirm').addEventListener('click', function() {
+  closeModal(unpauseBackdrop);
+  contractState.paused = false;
+  syncStatusBar(); syncPauseButtons();
+  document.getElementById('pause-success-msg').textContent = 'Contract unpaused. New games are enabled.';
+  showFeedback(document.getElementById('pause-success'), 6000);
+});
+
+// ── Close modals on backdrop click ───────────────────────────────────────────
+document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+  backdrop.addEventListener('click', function(e) {
+    if (e.target === backdrop) closeModal(backdrop);
+  });
+});
+</script>
+</body>
+</html>
