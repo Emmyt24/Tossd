@@ -461,6 +461,42 @@ pub fn verify_commitment(env: &Env, secret: &Bytes, commitment: &BytesN<32>) -> 
     &hash == commitment
 }
 
+/// Deterministically derives a [`Side`] outcome from the player's revealed secret
+/// and the contract's pre-committed random value.
+///
+/// ## Algorithm
+///
+/// ```text
+/// combined      = player_secret || contract_random   (concatenation)
+/// combined_hash = SHA-256(combined)
+/// outcome_bit   = combined_hash[0] & 1
+/// outcome       = if outcome_bit == 0 { Heads } else { Tails }
+/// ```
+///
+/// ## Security Properties
+///
+/// - **Player cannot bias**: the secret is locked by the commitment before
+///   `contract_random` is known, so the player cannot choose a secret that
+///   targets a desired outcome after seeing the contract's contribution.
+/// - **Contract cannot bias**: `contract_random` is derived from the ledger
+///   sequence at `start_game` time and stored immutably in [`GameState`];
+///   the contract cannot alter it after the player commits.
+/// - **Deterministic**: identical inputs always produce identical outputs —
+///   no hidden state or side effects.
+///
+/// # Arguments
+/// - `env`             – Soroban execution environment (needed for SHA-256)
+/// - `player_secret`   – the raw secret bytes revealed by the player
+/// - `contract_random` – the 32-byte contract randomness stored in [`GameState`]
+pub fn generate_outcome(env: &Env, player_secret: &Bytes, contract_random: &BytesN<32>) -> Side {
+    let cr_bytes = Bytes::from_slice(env, &contract_random.to_array());
+    let mut combined = Bytes::new(env);
+    combined.append(player_secret);
+    combined.append(&cr_bytes);
+    let hash = env.crypto().sha256(&combined);
+    if hash.to_array()[0] % 2 == 0 { Side::Heads } else { Side::Tails }
+}
+
 /// Provably fair coinflip game contract for the Stellar/Soroban platform.
 ///
 /// ## Public API
@@ -765,13 +801,7 @@ impl CoinflipContract {
         }
 
         // Determine outcome by combining player secret + contract random
-        let cr_bytes = Bytes::from_slice(&env, &game.contract_random.to_array());
-        let mut combined = Bytes::new(&env);
-        combined.append(&secret);
-        combined.append(&cr_bytes);
-        let combined_hash = env.crypto().sha256(&combined);
-        let outcome_bit = combined_hash.to_array()[0] % 2;
-        let outcome = if outcome_bit == 0 { Side::Heads } else { Side::Tails };
+        let outcome = generate_outcome(&env, &secret, &game.contract_random);
 
         let won = outcome == game.side;
 
@@ -5645,6 +5675,54 @@ mod outcome_determinism_tests {
             fee_bps in 0u32..=10_000u32,
         ) {
             prop_assert_eq!(calculate_payout(0, streak, fee_bps), Some(0));
+        }
+
+        /// generate_outcome is deterministic: same inputs always produce the same Side.
+        #[test]
+        fn prop_generate_outcome_is_deterministic(
+            secret_bytes   in prop::array::uniform32(any::<u8>()),
+            contract_bytes in prop::array::uniform32(any::<u8>()),
+        ) {
+            let env = soroban_sdk::Env::default();
+            let secret   = soroban_sdk::Bytes::from_slice(&env, &secret_bytes);
+            let cr: BytesN<32> = BytesN::from_array(&env, &contract_bytes);
+            prop_assert_eq!(generate_outcome(&env, &secret, &cr), generate_outcome(&env, &secret, &cr));
+        }
+
+        /// generate_outcome returns only Heads or Tails — no other variant possible.
+        #[test]
+        fn prop_generate_outcome_returns_valid_side(
+            secret_bytes   in prop::array::uniform32(any::<u8>()),
+            contract_bytes in prop::array::uniform32(any::<u8>()),
+        ) {
+            let env = soroban_sdk::Env::default();
+            let secret = soroban_sdk::Bytes::from_slice(&env, &secret_bytes);
+            let cr: BytesN<32> = BytesN::from_array(&env, &contract_bytes);
+            let side = generate_outcome(&env, &secret, &cr);
+            prop_assert!(side == Side::Heads || side == Side::Tails);
+        }
+
+        /// Distinct (secret, contract_random) pairs must not always produce the same side —
+        /// i.e. both outcomes are reachable (distribution sanity check).
+        #[test]
+        fn prop_generate_outcome_both_sides_reachable(
+            pairs in prop::collection::vec(
+                (prop::array::uniform32(any::<u8>()), prop::array::uniform32(any::<u8>())),
+                50..=50,
+            ),
+        ) {
+            let env = soroban_sdk::Env::default();
+            let mut saw_heads = false;
+            let mut saw_tails = false;
+            for (s, c) in pairs {
+                let secret = soroban_sdk::Bytes::from_slice(&env, &s);
+                let cr: BytesN<32> = BytesN::from_array(&env, &c);
+                match generate_outcome(&env, &secret, &cr) {
+                    Side::Heads => saw_heads = true,
+                    Side::Tails => saw_tails = true,
+                }
+            }
+            prop_assert!(saw_heads && saw_tails, "both sides must be reachable");
         }
     }
 }
