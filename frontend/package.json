@@ -15,7 +15,8 @@
     "test:visual": "playwright test --grep @visual",
     "test:all": "npm run test:unit && npm run test:hooks && npm run test:perf && npm run test:e2e && npm run test:visual",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:ui": "vitest --ui"
   },
   "keywords": [],
   "author": "",
