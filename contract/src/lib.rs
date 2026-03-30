@@ -768,17 +768,45 @@ impl CoinflipContract {
 
     /// Reveal the player's secret to determine the game outcome.
     ///
-    /// Process:
-    /// 1. Verify commitment matches the revealed secret
-    /// 2. Combine player random + contract random to determine outcome
-    /// 3. Update game state to Revealed phase with result
-    /// 4. If player wins, calculate potential payout
-    /// 5. If player loses, end game and reset streak
+    /// ## Outcome Resolution Flow
     ///
-    /// Errors:
-    /// - NoActiveGame: player has no game in Committed phase
-    /// - InvalidPhase: game not in Committed phase (preventing double-reveal)
-    /// - CommitmentMismatch: revealed secret doesn't match stored commitment
+    /// 1. **Guard checks** (in order, no state mutation on failure):
+    ///    - Player must have an active game (`NoActiveGame`)
+    ///    - Game must be in `Committed` phase (`InvalidPhase`)
+    ///    - `SHA-256(secret) == commitment` (`CommitmentMismatch`)
+    /// 2. **Outcome derivation** via [`generate_outcome`]:
+    ///    `SHA-256(secret || contract_random)` — LSB 0 → `Heads`, LSB 1 → `Tails`
+    /// 3. **Win path** (`outcome == game.side`):
+    ///    - `streak` incremented by 1 (determines multiplier tier for settlement)
+    ///    - `phase` advanced to `Revealed`
+    ///    - Game state persisted; player may call `cash_out`, `claim_winnings`, or `continue_streak`
+    ///    - Returns `Ok(true)`
+    /// 4. **Loss path** (`outcome != game.side`):
+    ///    - `reserve_balance` credited with the forfeited wager (checked add)
+    ///    - Game state deleted from storage (slot freed immediately)
+    ///    - Returns `Ok(false)`
+    ///
+    /// ## Security
+    ///
+    /// Neither party can unilaterally bias the outcome:
+    /// - The player's secret is locked by the commitment before `contract_random` is known.
+    /// - `contract_random` is derived from the ledger sequence at `start_game` time and
+    ///   stored immutably; the contract cannot alter it after the player commits.
+    ///
+    /// ## Arguments
+    /// - `player` – must authorize; must have an active game in `Committed` phase
+    /// - `secret` – the pre-image of the stored commitment (`SHA-256(secret) == commitment`)
+    ///
+    /// ## Returns
+    /// - `Ok(true)`  – player won; game advanced to `Revealed`
+    /// - `Ok(false)` – player lost; game state deleted, wager forfeited to reserves
+    ///
+    /// ## Errors
+    /// | Error                | Condition                                              |
+    /// |----------------------|--------------------------------------------------------|
+    /// | `NoActiveGame`       | No game record exists for `player`                     |
+    /// | `InvalidPhase`       | Game is not in `Committed` phase                       |
+    /// | `CommitmentMismatch` | `SHA-256(secret) != stored commitment`                 |
     pub fn reveal(
         env: Env,
         player: Address,
@@ -6767,16 +6795,7 @@ mod integration_tests {
                 .crypto()
                 .sha256(&Bytes::from_slice(&self.env, &seq_bytes))
                 .into();
-            let cr_bytes = Bytes::from_slice(&self.env, &contract_random.to_array());
-            let mut combined = Bytes::new(&self.env);
-            combined.append(&secret);
-            combined.append(&cr_bytes);
-            let hash = self.env.crypto().sha256(&combined);
-            if hash.to_array()[0] % 2 == 0 {
-                Side::Heads
-            } else {
-                Side::Tails
-            }
+            generate_outcome(&self.env, &secret, &contract_random)
         }
     }
 
@@ -6920,8 +6939,111 @@ mod integration_tests {
         assert_eq!(h.game_state(&player).phase, GamePhase::Committed);
     }
 
+    // ── Reveal outcome resolution ─────────────────────────────────────────
+
+    /// Win path: reveal returns true, phase advances to Revealed, streak = 1.
     #[test]
-    fn test_start_game_rejected_when_reserves_insufficient() {
+    fn test_reveal_win_advances_phase_and_increments_streak() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(1));
+        let result = h.client.reveal(&player, &h.make_secret(1));
+        assert!(result, "seed 1 + Heads must win");
+        let game = h.game_state(&player);
+        assert_eq!(game.phase, GamePhase::Revealed);
+        assert_eq!(game.streak, 1);
+    }
+
+    /// Loss path: reveal returns false, game state is deleted, reserves credited.
+    #[test]
+    fn test_reveal_loss_deletes_game_and_credits_reserves() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        let reserve_before = h.stats().reserve_balance;
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(3));
+        let result = h.client.reveal(&player, &h.make_secret(3));
+        assert!(!result, "seed 3 + Heads must lose");
+        // Game state must be gone.
+        let game_opt = h.env.as_contract(&h.contract_id, || {
+            CoinflipContract::load_player_game(&h.env, &player)
+        });
+        assert!(game_opt.is_none(), "game state must be deleted after loss");
+        // Reserve must be credited with the forfeited wager.
+        assert_eq!(h.stats().reserve_balance, reserve_before + DEFAULT_WAGER);
+    }
+
+    /// CommitmentMismatch leaves game in Committed phase — no state mutation.
+    #[test]
+    fn test_reveal_commitment_mismatch_no_state_mutation() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(1));
+        let before = h.game_state(&player);
+        let _ = h.client.try_reveal(&player, &h.make_secret(2));
+        let after = h.game_state(&player);
+        assert_eq!(before, after, "state must be unchanged on CommitmentMismatch");
+    }
+
+    /// reveal on a Revealed-phase game returns InvalidPhase.
+    #[test]
+    fn test_reveal_invalid_phase_already_revealed() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        // Win to reach Revealed phase.
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(1));
+        h.client.reveal(&player, &h.make_secret(1));
+        assert_eq!(h.game_state(&player).phase, GamePhase::Revealed);
+        // Second reveal must be rejected.
+        let result = h.client.try_reveal(&player, &h.make_secret(1));
+        assert_eq!(result, Err(Ok(Error::InvalidPhase)));
+    }
+
+    /// reveal with no active game returns NoActiveGame.
+    #[test]
+    fn test_reveal_no_active_game() {
+        let h = Harness::new();
+        let player = h.player();
+        let result = h.client.try_reveal(&player, &h.make_secret(1));
+        assert_eq!(result, Err(Ok(Error::NoActiveGame)));
+    }
+
+    /// After a loss the player slot is free — a new start_game succeeds immediately.
+    #[test]
+    fn test_reveal_loss_frees_slot_for_new_game() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(3));
+        h.client.reveal(&player, &h.make_secret(3)); // loss
+        let result = h.client.try_start_game(
+            &player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(1),
+        );
+        assert!(result.is_ok(), "new game must be accepted after loss");
+        assert_eq!(h.game_state(&player).streak, 0, "streak must start at 0 for new game");
+    }
+
+    /// Outcome is determined by generate_outcome: same secret + contract_random → same side.
+    #[test]
+    fn test_reveal_outcome_matches_generate_outcome() {
+        let h = Harness::new();
+        let player = h.player();
+        h.fund(1_000_000_000);
+        let seed = 1u8;
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &h.make_commitment(seed));
+        // Capture contract_random before reveal.
+        let contract_random = h.game_state(&player).contract_random;
+        let secret = h.make_secret(seed);
+        let expected_side = generate_outcome(&h.env, &secret, &contract_random);
+        let won = h.client.reveal(&player, &secret);
+        assert_eq!(won, expected_side == Side::Heads,
+            "reveal result must match generate_outcome prediction");
+    }
+
+
         let h = Harness::new();
         let player = h.player();
         let result = h.client.try_start_game(
