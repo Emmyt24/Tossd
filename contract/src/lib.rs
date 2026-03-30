@@ -1351,6 +1351,46 @@ impl CoinflipContract {
 
         Ok(game.wager)
     }
+
+    /// Return the current contract configuration.
+    ///
+    /// Read-only; does not require authorization.
+    ///
+    /// # Returns
+    /// The [`ContractConfig`] stored at initialization, reflecting any
+    /// subsequent admin updates (`set_fee`, `set_treasury`, `set_wager_limits`,
+    /// `set_paused`).
+    ///
+    /// # Errors
+    /// Panics if the contract has not been initialized.
+    pub fn get_config(env: Env) -> ContractConfig {
+        Self::load_config(&env)
+    }
+
+    /// Return the current aggregate contract statistics.
+    ///
+    /// Read-only; does not require authorization.
+    ///
+    /// # Returns
+    /// The [`ContractStats`] snapshot: `total_games`, `total_volume`,
+    /// `total_fees`, and `reserve_balance`.
+    ///
+    /// # Errors
+    /// Panics if the contract has not been initialized.
+    pub fn get_stats(env: Env) -> ContractStats {
+        Self::load_stats(&env)
+    }
+
+    /// Return the active game state for `player`, if one exists.
+    ///
+    /// Read-only; does not require authorization.
+    ///
+    /// # Returns
+    /// - `Some(GameState)` – player has an active game in any phase
+    /// - `None`            – no game record exists for `player`
+    pub fn get_game_state(env: Env, player: Address) -> Option<GameState> {
+        Self::load_player_game(&env, &player)
+    }
 }
 
 #[cfg(test)]
@@ -7043,7 +7083,8 @@ mod integration_tests {
             "reveal result must match generate_outcome prediction");
     }
 
-
+    #[test]
+    fn test_start_game_rejected_when_reserves_insufficient() {
         let h = Harness::new();
         let player = h.player();
         let result = h.client.try_start_game(
@@ -7133,6 +7174,103 @@ mod integration_tests {
         let secret = h.make_secret(1);
         let won = h.client.reveal(&player, &secret);
         assert!(won, "probe_outcome prediction must match actual reveal outcome");
+    }
+
+    // ── Query functions ───────────────────────────────────────────────────
+
+    /// get_config returns the configuration set at initialize time.
+    #[test]
+    fn test_get_config_returns_initialized_values() {
+        let h = Harness::new();
+        let config = h.client.get_config();
+        assert_eq!(config.fee_bps, DEFAULT_FEE_BPS);
+        assert_eq!(config.min_wager, DEFAULT_MIN_WAGER);
+        assert_eq!(config.max_wager, DEFAULT_MAX_WAGER);
+        assert!(!config.paused);
+    }
+
+    /// get_config reflects admin updates (set_fee, set_paused).
+    #[test]
+    fn test_get_config_reflects_admin_updates() {
+        let h = Harness::new();
+        h.client.set_fee(&h.admin, &400);
+        assert_eq!(h.client.get_config().fee_bps, 400);
+        h.set_paused(true);
+        assert!(h.client.get_config().paused);
+        h.set_paused(false);
+        assert!(!h.client.get_config().paused);
+    }
+
+    /// get_stats returns zero-state after initialization.
+    #[test]
+    fn test_get_stats_initial_state() {
+        let h = Harness::new();
+        let stats = h.client.get_stats();
+        assert_eq!(stats.total_games, 0);
+        assert_eq!(stats.total_volume, 0);
+        assert_eq!(stats.total_fees, 0);
+    }
+
+    /// get_stats reflects games started and fees collected.
+    #[test]
+    fn test_get_stats_reflects_game_activity() {
+        let h = Harness::new();
+        h.fund(1_000_000_000);
+        let player = h.player();
+        h.play_win_round(&player, DEFAULT_WAGER);
+        let stats_after_win = h.client.get_stats();
+        assert_eq!(stats_after_win.total_games, 1);
+        assert_eq!(stats_after_win.total_volume, DEFAULT_WAGER);
+        // Cash out to trigger fee collection.
+        h.client.cash_out(&player);
+        let stats_after_cashout = h.client.get_stats();
+        assert!(stats_after_cashout.total_fees > 0);
+    }
+
+    /// get_game_state returns None when no game exists.
+    #[test]
+    fn test_get_game_state_none_when_no_game() {
+        let h = Harness::new();
+        let player = h.player();
+        assert!(h.client.get_game_state(&player).is_none());
+    }
+
+    /// get_game_state returns Some with correct fields after start_game.
+    #[test]
+    fn test_get_game_state_some_after_start_game() {
+        let h = Harness::new();
+        h.fund(1_000_000_000);
+        let player = h.player();
+        let commitment = h.make_commitment(1);
+        h.client.start_game(&player, &Side::Heads, &DEFAULT_WAGER, &commitment);
+        let state = h.client.get_game_state(&player).expect("game state must exist");
+        assert_eq!(state.phase, GamePhase::Committed);
+        assert_eq!(state.side, Side::Heads);
+        assert_eq!(state.wager, DEFAULT_WAGER);
+        assert_eq!(state.streak, 0);
+        assert_eq!(state.commitment, commitment);
+    }
+
+    /// get_game_state returns None after a loss (game deleted).
+    #[test]
+    fn test_get_game_state_none_after_loss() {
+        let h = Harness::new();
+        h.fund(1_000_000_000);
+        let player = h.player();
+        h.play_loss_round(&player, DEFAULT_WAGER);
+        assert!(h.client.get_game_state(&player).is_none());
+    }
+
+    /// get_game_state reflects phase transition after a win.
+    #[test]
+    fn test_get_game_state_revealed_after_win() {
+        let h = Harness::new();
+        h.fund(1_000_000_000);
+        let player = h.player();
+        h.play_win_round(&player, DEFAULT_WAGER);
+        let state = h.client.get_game_state(&player).expect("game state must exist after win");
+        assert_eq!(state.phase, GamePhase::Revealed);
+        assert_eq!(state.streak, 1);
     }
 }
 
