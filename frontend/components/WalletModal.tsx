@@ -42,7 +42,7 @@ async function defaultConnectWallet(walletId: WalletId): Promise<string> {
     return getPublicKey();
   }
   if (walletId === "albedo") {
-    const albedo = (await import(/* webpackIgnore: true */ "albedo-link")).default;
+    const albedo = (await import(/* webpackIgnore: true */ "@albedo-link/intent")).default;
     const result = await albedo.publicKey({ require_existing: false });
     return result.pubkey;
   }

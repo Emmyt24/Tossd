@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4173";
-const storybookURL = process.env.PLAYWRIGHT_STORYBOOK_URL ?? "http://127.0.0.1:6006";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173";
 
 export default defineConfig({
-  testDir: "./playwright",
+  testDir: "./tests/e2e",
   timeout: 30_000,
   expect: {
     timeout: 5_000,
@@ -23,14 +22,13 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "npm run storybook -- --ci --quiet",
-      url: storybookURL,
+      command: "npm run dev -- --host 127.0.0.1",
+      url: baseURL,
       timeout: 120_000,
       reuseExistingServer: true,
     },
   ],
   metadata: {
     baseURL,
-    storybookURL,
   },
 });
