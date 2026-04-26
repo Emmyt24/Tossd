@@ -1,0 +1,313 @@
+/* SecurityDashboard — security audit log monitoring panel */
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
+  font-size: 0.8125rem;
+  color: var(--color-text, #e2e8f0);
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text, #e2e8f0);
+  margin: 0;
+}
+
+.chainStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.chainStatus:hover {
+  opacity: 0.8;
+}
+
+.chainValid {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.chainInvalid {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.chainUnknown {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.statCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.875rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.statLabel {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #64748b);
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.severityInfo {
+  color: #60a5fa;
+}
+.severityWarning {
+  color: #fbbf24;
+}
+.severityError {
+  color: #f87171;
+}
+.severityCritical {
+  color: #ef4444;
+}
+.severityTotal {
+  color: #e2e8f0;
+}
+
+/* ── Category breakdown ──────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #64748b);
+  margin: 0;
+}
+
+.categoryRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.categoryLabel {
+  width: 7rem;
+  color: var(--color-text-muted, #94a3b8);
+  flex-shrink: 0;
+}
+
+.barTrack {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 3px;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+.categoryCount {
+  width: 2.5rem;
+  text-align: right;
+  color: var(--color-text-muted, #94a3b8);
+}
+
+/* ── Anomaly alerts ───────────────────────────────────────────────────────── */
+
+.anomalyList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.anomalyItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  font-size: 0.75rem;
+}
+
+.anomalyIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.anomalyText {
+  color: #fca5a5;
+  line-height: 1.4;
+}
+
+.noAnomalies {
+  color: #10b981;
+  font-size: 0.75rem;
+  padding: 0.375rem 0;
+}
+
+/* ── Event feed ──────────────────────────────────────────────────────────── */
+
+.eventFeed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.eventRow {
+  display: grid;
+  grid-template-columns: 5.5rem 4.5rem 7rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background 0.1s;
+}
+
+.eventRow:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.eventTime {
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.eventSeverityBadge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  text-align: center;
+}
+
+.badge-info {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+.badge-warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+.badge-error {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+.badge-critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.eventType {
+  color: #94a3b8;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eventActor {
+  color: #cbd5e1;
+  font-size: 0.6875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.empty {
+  color: var(--color-text-muted, #64748b);
+  font-size: 0.75rem;
+  padding: 0.5rem 0;
+  text-align: center;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.actionBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
